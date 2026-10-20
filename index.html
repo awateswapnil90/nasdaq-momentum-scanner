@@ -1,0 +1,665 @@
+<title>NASDAQ Momentum Scanner</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: header band, stacked panels (settings, system, results); results table scrolls sideways on phones with Rank+Scrip pinned. */
+:root{
+  --bg:#f4f6fa; --panel:#ffffff; --line:#dfe4ec; --ink:#1d2433; --muted:#6b7487;
+  --navy:#1f3f86; --navy-2:#2a52a8; --on-navy:#ffffff; --soft:#eef3fc; --pass:#127a3e; --pass-bg:#e7f6ec;
+  --fail:#b3261e; --fail-bg:#fdecea; --amber:#fff4dc;
+  --field:#ffffff; --field-line:#c9d1de; --field-off:#f1f3f7; --field-off-ink:#9aa3b2;
+  --row-line:#edf0f5; --row-hover:#f8faff; --fail-ink:#8a93a3; --body-ink:#3a4356;
+  --radius:8px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f141d; --panel:#171e2b; --line:#2a3344; --ink:#e4e9f2; --muted:#94a0b5;
+  --navy:#6f97ec; --navy-2:#86a8f0; --on-navy:#0b1220; --soft:#1e2838; --pass:#4cc480; --pass-bg:#173225;
+  --fail:#f0786e; --fail-bg:#3a1d1c; --amber:#3a2f16;
+  --field:#101722; --field-line:#3a4559; --field-off:#1b2230; --field-off-ink:#6b7790;
+  --row-line:#232c3b; --row-hover:#1c2534; --fail-ink:#6f7a8f; --body-ink:#c3cbd9;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f141d; --panel:#171e2b; --line:#2a3344; --ink:#e4e9f2; --muted:#94a0b5;
+  --navy:#6f97ec; --navy-2:#86a8f0; --on-navy:#0b1220; --soft:#1e2838; --pass:#4cc480; --pass-bg:#173225;
+  --fail:#f0786e; --fail-bg:#3a1d1c; --amber:#3a2f16;
+  --field:#101722; --field-line:#3a4559; --field-off:#1b2230; --field-off-ink:#6b7790;
+  --row-line:#232c3b; --row-hover:#1c2534; --fail-ink:#6f7a8f; --body-ink:#c3cbd9;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 -apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+header{background:var(--panel);border-bottom:1px solid var(--line);padding-block:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px}
+header h1{font-size:20px;margin:0;color:var(--ink)}
+#dataInfo{color:var(--muted);font-size:12.5px}
+#dataInfo b{color:var(--ink)}
+main{max-width:1500px;margin:0 auto;padding-block:14px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px}
+.panel h2{font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:0;padding:10px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:0}
+.cell{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.cell>.lbl{width:112px;font-weight:600;flex:none}
+input[type=number],input[type=text],select{font:inherit;padding:5px 7px;border:1px solid var(--field-line);border-radius:6px;background:var(--field);color:var(--ink)}
+input[type=number]{width:72px}
+input.w-s{width:58px} input.w-l{width:110px}
+input:disabled,select:disabled{background:var(--field-off);color:var(--field-off-ink)}
+input[type=checkbox],input[type=radio]{width:16px;height:16px;accent-color:var(--navy);margin:0}
+label.chk{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.pgrp{display:inline-flex;align-items:center;gap:4px}
+.hint{color:var(--muted);font-size:12px}
+.btn{font:600 13px/1 inherit;font-family:inherit;letter-spacing:.03em;padding:10px 18px;border-radius:6px;border:1px solid var(--navy);background:var(--navy);color:var(--on-navy);cursor:pointer;text-transform:uppercase}
+.btn:hover{background:var(--navy-2)}
+.btn.ghost{background:var(--panel);color:var(--navy)}
+.btn.ghost:hover{background:var(--soft)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 14px}
+.actions .spacer{flex:1}
+#status{font-size:13px;color:var(--muted)}
+#status b{color:var(--ink)}
+/* system builder */
+table.cond{width:100%;border-collapse:collapse}
+table.cond td{padding:8px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.cond td.n{width:34px;color:var(--muted);font-weight:600}
+table.cond td.c{width:34px}
+.condline{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.expr{padding:10px 14px;font-size:13px;color:var(--muted)}
+.expr code{color:var(--ink);font-size:13px}
+/* results */
+.tablewrap{overflow-x:auto}
+table.res{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table.res th{background:var(--soft);text-align:right;font-weight:600;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0}
+table.res th.l,table.res td.l{text-align:left}
+table.res th .arr{color:var(--navy);font-size:11px}
+table.res td{padding:7px 10px;border-bottom:1px solid var(--row-line);text-align:right;white-space:nowrap;background:var(--panel)}
+table.res tr:hover td{background:var(--row-hover)}
+table.res tr.failrow td{color:var(--fail-ink)}
+table.res a{color:var(--navy);font-weight:600;text-decoration:none}
+table.res a:hover{text-decoration:underline}
+.nm{color:var(--muted);font-size:12px;max-width:230px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:bottom}
+.pos{color:var(--pass)} .neg{color:var(--fail)}
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11.5px;font-weight:600}
+.tag.ok{background:var(--pass-bg);color:var(--pass)}
+.tag.no{background:var(--fail-bg);color:var(--fail)}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.loadbox{padding:22px 16px;text-align:center}
+.loadbox p{margin:6px 0;color:var(--muted)}
+details.help{padding:0 14px 12px;font-size:13px;color:var(--body-ink)}
+details.help summary{cursor:pointer;color:var(--navy);font-weight:600;padding:10px 0}
+details.help li{margin:3px 0}
+.btn:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+table.res th:nth-child(1),table.res td:nth-child(1){position:sticky;left:0;z-index:1;min-width:46px}
+table.res th:nth-child(2),table.res td:nth-child(2){position:sticky;left:46px;z-index:1;box-shadow:1px 0 0 var(--line)}
+table.res th:nth-child(1),table.res th:nth-child(2){z-index:2}
+#jump{margin-left:auto;color:var(--navy);font-weight:600;text-decoration:none;font-size:13px}
+#msg{font-size:13px;color:var(--pass);font-weight:600}
+@media (max-width:640px){
+  .nm{display:none}
+  table.res th:nth-child(3),table.res td:nth-child(3){display:none}
+  .grid{grid-template-columns:1fr}
+  .cell>.lbl{width:100%}
+  .btn{padding:10px 12px}
+  header h1{font-size:18px}
+}
+</style>
+<header>
+  <h1>NASDAQ Momentum Scanner</h1>
+  <div id="dataInfo">No data loaded</div>
+  <a id="jump" href="#results">Results ↓</a>
+</header>
+
+<main>
+  <!-- data loader (shown only if scanner_data.js not found) -->
+  <section class="panel" id="loader" hidden>
+    <div class="loadbox">
+      <p><b>scanner_data.js</b> was not found next to this page.</p>
+      <p>In Terminal run <code>python3 ~/NASDAQ_MOMMENTUM/download_data.py</code>, then refresh this page — or pick <b>scanner_data.js</b> manually:</p>
+      <p><input type="file" id="fileIn" accept=".js,.json"></p>
+    </div>
+  </section>
+
+  <!-- ===================== SCANNER SETTINGS ===================== -->
+  <section class="panel">
+    <h2>Scanner settings <span><button class="btn ghost" id="resetBtn" type="button" style="padding:6px 10px;font-size:11px">Reset to defaults</button></span></h2>
+    <div class="grid">
+      <div class="cell"><span class="lbl">Scan as of</span>
+        <select id="asOf"></select><span class="hint">latest bar by default</span></div>
+
+      <div class="cell"><span class="lbl">Sector</span>
+        <select id="sector"><option value="">All sectors</option></select></div>
+
+      <div class="cell"><span class="lbl">Period (days)</span>
+        <span class="pgrp"><input type="checkbox" id="p0on"><input type="number" class="w-s" id="p0"></span>
+        <span class="pgrp"><input type="checkbox" id="p1on"><input type="number" class="w-s" id="p1"></span>
+        <span class="pgrp"><input type="checkbox" id="p2on"><input type="number" class="w-s" id="p2"></span>
+        <span class="pgrp"><input type="checkbox" id="p3on"><input type="number" class="w-s" id="p3"></span>
+      </div>
+
+      <div class="cell"><span class="lbl">Weight</span>
+        <input type="number" class="w-s" id="w0" step="0.1"><input type="number" class="w-s" id="w1" step="0.1">
+        <input type="number" class="w-s" id="w2" step="0.1"><input type="number" class="w-s" id="w3" step="0.1">
+      </div>
+
+      <div class="cell"><span class="lbl">Retracement</span>
+        <input type="checkbox" id="rtOn"><input type="number" class="w-s" id="rtPct"> %
+        <select id="rtMode"><option value="within">Within</option><option value="beyond">Beyond</option></select>
+        <select id="rtRef"><option value="h52">52 Week High</option><option value="l52">52 Week Low</option><option value="ath">ATH</option><option value="atl">ATL</option></select>
+      </div>
+
+      <div class="cell"><span class="lbl">EMA filter</span>
+        <span class="pgrp"><input type="checkbox" id="e0on"><input type="number" class="w-s" id="e0"></span>
+        <span class="pgrp"><input type="checkbox" id="e1on"><input type="number" class="w-s" id="e1"></span>
+        <span class="hint">Close above EMA</span>
+      </div>
+
+      <div class="cell"><span class="lbl">Volume</span>
+        <select id="volMode"><option value="vol">Volume above</option><option value="tov">Turnover above ($)</option></select>
+        <input type="number" class="w-l" id="volMin" min="0">
+        <select id="volStat"><option value="avg">Average</option><option value="med">Median</option></select>
+        of <input type="number" class="w-s" id="volDays" min="1"> d
+      </div>
+
+      <div class="cell"><span class="lbl">Price</span>
+        <label class="chk"><input type="checkbox" id="paOn">Above $</label><input type="number" class="w-s" id="paVal">
+        <label class="chk"><input type="checkbox" id="pbOn">Below $</label><input type="number" class="w-s" id="pbVal">
+      </div>
+
+      <div class="cell"><span class="lbl">Market cap</span>
+        <label class="chk"><input type="checkbox" id="topOn">Top</label><input type="number" class="w-s" id="topN" min="1">
+        <span class="hint">by market cap, within loaded data</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== SYSTEM BUILDER ===================== -->
+  <section class="panel">
+    <h2><label class="chk" style="text-transform:none;letter-spacing:0;font-size:14px;color:var(--ink)"><input type="checkbox" id="sysOn"> System: Momentum_investing_Entry</label>
+      <span class="hint" style="text-transform:none;letter-spacing:0">untick a condition to drop it</span></h2>
+    <table class="cond" id="condTable"></table>
+    <div class="expr">Expression: <code id="exprTxt"></code></div>
+  </section>
+
+  <!-- ===================== ACTIONS ===================== -->
+  <section class="panel" id="results">
+    <div class="actions">
+      <div id="status">Load data to scan.</div>
+      <span id="msg" role="status"></span>
+      <span class="spacer"></span>
+      <label class="chk"><input type="checkbox" id="showAll"> Show failed stocks too</label>
+      <button class="btn" id="scanBtn" type="button" disabled>Scan</button>
+      <button class="btn ghost" id="exportBtn" type="button" disabled>Export / copy CSV</button>
+    </div>
+    <div class="tablewrap">
+      <table class="res" id="resTable"></table>
+    </div>
+    <div class="empty" id="emptyMsg">Results appear here after you scan.</div>
+    <details class="help">
+      <summary>How each column is calculated</summary>
+      <ul>
+        <li><b>Return %</b> — Close today ÷ Close <i>P</i> bars ago − 1. With several periods ticked, the weighted average of each period's return using the Weight row.</li>
+        <li><b>Sharpe Return</b> — each period's Return % ÷ its annualised volatility % (stdev of daily returns × √252), weighted the same way.</li>
+        <li><b>Volatility %</b> — annualised volatility over the longest ticked period.</li>
+        <li><b>Retracement %</b> — for 52W High / ATH: how far Close is below the high. For 52W Low / ATL: how far Close is above the low.</li>
+        <li><b>RSI</b> — Wilder's RSI on Close, period from condition 5. <b>EMAs</b> — on Close, seeded with an SMA (same as TradingView).</li>
+        <li><b>TTM Sales / TTM Profit</b> — sum of the latest 4 quarters of Total Revenue / Net Income (Yahoo Finance). <b>Rising</b> = higher than the TTM ending 1 (or 2) quarter(s) earlier, which is the same as the latest quarter beating the same quarter a year ago. Stocks with no quarterly data fail these two conditions. Quarterly results are the latest available, even when you scan an earlier date.</li>
+        <li><b>Avg Vol</b> — the volume statistic chosen in the Volume row (average or median over the chosen days).</li>
+        <li>Prices are split/dividend adjusted (Yahoo Finance), so values can differ slightly from unadjusted charts.</li>
+      </ul>
+    </details>
+  </section>
+</main>
+
+<!-- data file written by download_data.py -->
+<script src="scanner_data.js" onerror="window.SCANNER_DATA_MISSING=true"></script>
+<script>
+"use strict";
+/* ===================================================================== defaults */
+const DEFAULTS = {
+  asOf: "", sector: "",
+  periods: [{on:true,v:252},{on:false,v:120},{on:false,v:90},{on:false,v:60}],
+  weights: [1,1,1,1],
+  rtOn:true, rtPct:20, rtMode:"within", rtRef:"h52",
+  ema: [{on:true,v:200},{on:false,v:100}],
+  volMode:"vol", volMin:0, volStat:"avg", volDays:20,
+  paOn:false, paVal:0, pbOn:false, pbVal:0,
+  topOn:false, topN:200,
+  showAll:false,
+  sysOn:true,
+  conds: [
+    {id:1, on:true, type:"emaema", a:50,  b:200},
+    {id:2, on:true, type:"pxema",  src:"h", p:50},
+    {id:3, on:true, type:"emaema", a:50,  b:150},
+    {id:4, on:true, type:"emaema", a:150, b:200},
+    {id:5, on:true, type:"rsi",    p:14,  lvl:38},
+    {id:6, on:true, type:"pxema",  src:"h", p:150},
+    {id:7, on:true, type:"pxema",  src:"h", p:200},
+    {id:8, on:true, type:"ttm",    fld:"rev", cmp:1, min:0},
+    {id:9, on:true, type:"ttm",    fld:"ni",  cmp:1, min:0, pos:false},
+  ],
+  sortKey:"ret", sortDir:-1,
+};
+const STORE_KEY = "nasdaqMomentumScanner.v1";
+const clone = o => JSON.parse(JSON.stringify(o));
+let S = loadSettings();
+let DATA = null;          // window.SCANNER_DATA
+let lastRows = [];        // last scan result (all evaluated rows)
+let lastG = 0, lastUni = 0;
+const cache = new Map();  // per-stock indicator cache: key "sym|ema|50" -> array
+
+/* ===================================================================== helpers */
+const $ = id => document.getElementById(id);
+function loadSettings(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){
+      const s = Object.assign(clone(DEFAULTS), JSON.parse(raw));
+      for(const dc of DEFAULTS.conds){                       // upgrade: add conditions introduced later
+        const ex = s.conds.find(c=>c.id===dc.id);
+        if(!ex) s.conds.push(clone(dc));
+        else for(const k in dc) if(!(k in ex)) ex[k] = dc[k];
+      }
+      s.conds.sort((a,b)=>a.id-b.id);
+      return s;
+    }
+  }catch(e){}
+  return clone(DEFAULTS);
+}
+function saveSettings(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(S)); }catch(e){} }
+const num = (v, d=0) => { const n = parseFloat(v); return isFinite(n) ? n : d; };
+const fmt = (v, d=2) => (v==null || !isFinite(v)) ? "–" : v.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+function fmtBig(v){
+  if(v==null || !isFinite(v)) return "–";
+  const a = Math.abs(v);
+  if(a>=1e12) return (v/1e12).toFixed(2)+"T";
+  if(a>=1e9)  return (v/1e9).toFixed(2)+"B";
+  if(a>=1e6)  return (v/1e6).toFixed(2)+"M";
+  if(a>=1e3)  return (v/1e3).toFixed(1)+"K";
+  return v.toFixed(0);
+}
+
+/* ===================================================================== indicators */
+// EMA seeded with SMA of first p values (TradingView-style). Returns array same length; null until seeded.
+function emaArr(src, p){
+  const out = new Array(src.length).fill(null);
+  if(p < 1 || src.length < p) return out;
+  const k = 2/(p+1);
+  let s = 0; for(let i=0;i<p;i++) s += src[i];
+  let e = s/p; out[p-1] = e;
+  for(let i=p;i<src.length;i++){ e = src[i]*k + e*(1-k); out[i] = e; }
+  return out;
+}
+// Wilder RSI, seeded with SMA of first p gains/losses
+function rsiArr(c, p){
+  const out = new Array(c.length).fill(null);
+  if(p < 1 || c.length <= p) return out;
+  let g=0,l=0;
+  for(let i=1;i<=p;i++){ const d=c[i]-c[i-1]; if(d>0) g+=d; else l-=d; }
+  g/=p; l/=p;
+  out[p] = l===0 ? 100 : 100 - 100/(1+g/l);
+  for(let i=p+1;i<c.length;i++){
+    const d=c[i]-c[i-1];
+    g = (g*(p-1) + (d>0?d:0))/p;
+    l = (l*(p-1) + (d<0?-d:0))/p;
+    out[i] = l===0 ? 100 : 100 - 100/(1+g/l);
+  }
+  return out;
+}
+function getEma(st, p){ const k=st.s+"|e|"+p; if(!cache.has(k)) cache.set(k, emaArr(st.c, p)); return cache.get(k); }
+function getRsi(st, p){ const k=st.s+"|r|"+p; if(!cache.has(k)) cache.set(k, rsiArr(st.c, p)); return cache.get(k); }
+
+function annVol(c, i, P){
+  // stdev of daily simple returns over last P bars (ending at i), annualised, in %
+  if(i-P < 0) return null;
+  let n=0, m=0, m2=0;
+  for(let k=i-P+1;k<=i;k++){
+    const r = c[k]/c[k-1]-1; n++;
+    const d = r-m; m += d/n; m2 += d*(r-m);
+  }
+  if(n<2) return null;
+  return Math.sqrt(m2/(n-1))*Math.sqrt(252)*100;
+}
+function median(a){ const b=[...a].sort((x,y)=>x-y); const n=b.length; return n? (n%2? b[(n-1)/2] : (b[n/2-1]+b[n/2])/2) : 0; }
+
+/* ===================================================================== TTM fundamentals */
+// st.f = {qd:[quarter-end dates newest first], rev:[...], ni:[...]}
+// TTM now = sum of latest 4 quarters; TTM before = same sum ending `cmp` quarter(s) earlier.
+function ttm(st, fld, cmp){
+  const f = st.f; if(!f || !f[fld]) return null;
+  const a = f[fld];
+  if(a.length < 4+cmp) return {err:"need "+(4+cmp)+"Q"};
+  const sum = (o)=>{ let t=0; for(let k=o;k<o+4;k++){ if(a[k]==null) return null; t+=a[k]; } return t; };
+  const now = sum(0), prev = sum(cmp);
+  if(now==null || prev==null) return {err:"gap"};
+  const gr = prev===0 ? null : (now-prev)/Math.abs(prev)*100;
+  return {now, prev, gr, q:f.qd[0]};
+}
+
+/* ===================================================================== conditions */
+const SRC_LBL = {h:"High", c:"Close"};
+function condLabel(c){
+  switch(c.type){
+    case "emaema": return `EMA ${c.a} above EMA ${c.b}`;
+    case "pxema":  return `${SRC_LBL[c.src]} above EMA ${c.p}`;
+    case "rsi":    return `RSI ${c.p} above ${c.lvl}`;
+    case "ttm":    return `TTM ${c.fld==="rev"?"Net Sales":"Net Profit"} rising`;
+  }
+}
+function evalCond(c, st, i){
+  switch(c.type){
+    case "emaema": { const a=getEma(st,c.a)[i], b=getEma(st,c.b)[i]; return (a==null||b==null)? null : a>b; }
+    case "pxema":  { const e=getEma(st,c.p)[i]; const px = c.src==="h"? st.h[i] : st.c[i]; return e==null? null : px>e; }
+    case "rsi":    { const r=getRsi(st,c.p)[i]; return r==null? null : r>c.lvl; }
+    case "ttm":    {
+      const t = ttm(st, c.fld, c.cmp);
+      if(!t || t.err) return null;                       // no data = fail
+      if(!(t.now > t.prev)) return false;
+      if(num(c.min)>0 && !(t.gr!=null && t.gr>=num(c.min))) return false;
+      if(c.pos && !(t.now>0)) return false;
+      return true;
+    }
+  }
+}
+
+/* ===================================================================== scan */
+function scan(){
+  if(!DATA) return;
+  readUI();
+  const g = S.asOf==="" ? DATA.dates.length-1 : DATA.dates.indexOf(S.asOf);
+  const periods = S.periods.map((p,i)=>({P:Math.round(num(p.v)), w:num(S.weights[i]), on:p.on})).filter(p=>p.on && p.P>0);
+  const emaF = S.ema.filter(e=>e.on && num(e.v)>0).map(e=>Math.round(num(e.v)));
+  const conds = S.sysOn ? S.conds.filter(c=>c.on) : [];
+  const rsiP = (S.conds.find(c=>c.type==="rsi")||{p:14}).p;
+  const maxP = periods.length ? Math.max(...periods.map(p=>p.P)) : 0;
+
+  // market-cap rank within loaded data
+  let allowed = DATA.stocks;
+  if(S.sector) allowed = allowed.filter(s=>s.sec===S.sector);
+  if(S.topOn){
+    allowed = [...allowed].sort((a,b)=>(b.mc||0)-(a.mc||0)).slice(0, Math.max(1,Math.round(num(S.topN))));
+  }
+
+  const rows = [];
+  for(const st of allowed){
+    const i = g - st.st;
+    if(i < 0) continue;                     // stock not listed yet on this date
+    const c = st.c, fails = [];
+    const C = c[i];
+
+    // returns + sharpe
+    let ret=null, shp=null;
+    if(periods.length){
+      let sw=0, sr=0, ss=0, ok=true;
+      for(const p of periods){
+        if(i-p.P < 0){ ok=false; break; }
+        const r = (C/c[i-p.P]-1)*100;
+        const v = annVol(c,i,p.P);
+        sr += p.w*r; ss += p.w*(v? r/v : 0); sw += p.w;
+      }
+      if(ok && sw>0){ ret=sr/sw; shp=ss/sw; } else fails.push("History<"+maxP+"d");
+    }
+    const vol = maxP ? annVol(c,i,maxP) : annVol(c,i,Math.min(252,i));
+
+    // 52W / ATH / ATL
+    const lo52 = Math.max(0,i-251);
+    let h52=-Infinity, l52=Infinity, hAll=st.hp??-Infinity, lAll=st.lp??Infinity;
+    for(let k=0;k<=i;k++){
+      const hk=st.h[k], lk=st.l[k];
+      if(hk>hAll) hAll=hk; if(lk<lAll) lAll=lk;
+      if(k>=lo52){ if(hk>h52) h52=hk; if(lk<l52) l52=lk; }
+    }
+    const refs = {h52, l52, ath:hAll, atl:lAll};
+    const ref = refs[S.rtRef];
+    const retr = (S.rtRef==="h52"||S.rtRef==="ath") ? (ref-C)/ref*100 : (C-ref)/ref*100;
+    if(S.rtOn){
+      const lim = num(S.rtPct);
+      const pass = S.rtMode==="within" ? retr<=lim : retr>lim;
+      if(!pass) fails.push("Retr");
+    }
+
+    // EMA filter (close above EMA)
+    for(const p of emaF){ const e=getEma(st,p)[i]; if(e==null || !(C>e)) fails.push("EMA"+p); }
+
+    // volume / turnover
+    const nd = Math.max(1,Math.round(num(S.volDays,20)));
+    const vs = []; for(let k=Math.max(0,i-nd+1);k<=i;k++) vs.push(S.volMode==="tov" ? st.v[k]*c[k] : st.v[k]);
+    const vstat = S.volStat==="med" ? median(vs) : vs.reduce((a,b)=>a+b,0)/vs.length;
+    if(num(S.volMin)>0 && !(vstat>num(S.volMin))) fails.push(S.volMode==="tov"?"Turnover":"Volume");
+
+    // price
+    if(S.paOn && !(C>num(S.paVal))) fails.push("Price<");
+    if(S.pbOn && !(C<num(S.pbVal))) fails.push("Price>");
+
+    // system conditions
+    for(const cd of conds){
+      const r = evalCond(cd, st, i);
+      if(r===true) continue;
+      if(cd.type==="ttm") fails.push(r===null ? (cd.fld==="rev"?"Sales?":"Profit?") : (cd.fld==="rev"?"Sales":"Profit"));
+      else fails.push("C"+cd.id);
+    }
+
+    rows.push({
+      s:st.s, n:st.n, sec:st.sec, mc:st.mc, lcp:C, ret, shp, vol, retr,
+      rsi:getRsi(st,rsiP)[i], e50:getEma(st,50)[i], e150:getEma(st,150)[i], e200:getEma(st,200)[i],
+      vstat, pass: fails.length===0, fails,
+      ...ttmCols(st),
+    });
+  }
+  // rank by Return % among passing stocks
+  const passing = rows.filter(r=>r.pass && r.ret!=null).sort((a,b)=>b.ret-a.ret);
+  passing.forEach((r,k)=>r.rank=k+1);
+  lastRows = rows;
+  saveSettings();
+  lastG = g; lastUni = allowed.length;
+  render();
+}
+
+function ttmCols(st){
+  const cs = S.conds.find(c=>c.type==="ttm"&&c.fld==="rev"), cn = S.conds.find(c=>c.type==="ttm"&&c.fld==="ni");
+  const r = ttm(st,"rev",cs?cs.cmp:1), n = ttm(st,"ni",cn?cn.cmp:1);
+  const ok = x => x && !x.err;
+  return { tRev: ok(r)?r.now:null, gRev: ok(r)?r.gr:null, tNi: ok(n)?n.now:null, gNi: ok(n)?n.gr:null,
+           qEnd: ok(r)?r.q:(ok(n)?n.q:(st.f&&st.f.qd?st.f.qd[0]:null)) };
+}
+
+/* ===================================================================== render */
+const COLS = [
+  {k:"rank", t:"Rank", d:0},
+  {k:"s",    t:"Scrip", l:true},
+  {k:"sec",  t:"Sector", l:true},
+  {k:"lcp",  t:"LCP $", d:2},
+  {k:"ret",  t:"Return %", d:2, sign:true},
+  {k:"shp",  t:"Sharpe Return", d:2, sign:true},
+  {k:"vol",  t:"Volatility %", d:1},
+  {k:"retr", t:"Retracement %", d:2},
+  {k:"rsi",  t:"RSI", d:1},
+  {k:"e50",  t:"EMA 50", d:2},
+  {k:"e150", t:"EMA 150", d:2},
+  {k:"e200", t:"EMA 200", d:2},
+  {k:"tRev", t:"TTM Sales", big:true},
+  {k:"gRev", t:"Sales Gr %", d:1, sign:true},
+  {k:"tNi",  t:"TTM Profit", big:true},
+  {k:"gNi",  t:"Profit Gr %", d:1, sign:true},
+  {k:"qEnd", t:"Latest Qtr", l:true},
+  {k:"vstat",t:"Avg Vol", big:true},
+  {k:"mc",   t:"Mkt Cap", big:true},
+  {k:"fails",t:"Status", l:true},
+];
+function render(){
+  const g = lastG, universeN = lastUni;
+  const rows = (S.showAll ? lastRows : lastRows.filter(r=>r.pass)).slice();
+  const k = S.sortKey, dir = S.sortDir;
+  rows.sort((a,b)=>{
+    if(k==="fails") return dir*(a.fails.length-b.fails.length);
+    let x=a[k], y=b[k];
+    if(k==="rank"){ x = x??1e9; y = y??1e9; }
+    if(typeof x==="string" || typeof y==="string") return dir*String(x??"").localeCompare(String(y??""));
+    x = (x==null||!isFinite(x)) ? -Infinity*dir : x; y = (y==null||!isFinite(y)) ? -Infinity*dir : y;
+    return dir*(x-y);
+  });
+
+  const nPass = lastRows.filter(r=>r.pass).length;
+  $("status").innerHTML = `<b>${nPass}</b> of ${lastRows.length} stocks pass · as of <b>${DATA.dates[g]}</b>`
+    + (universeN!==lastRows.length ? ` · ${universeN-lastRows.length} not listed yet` : "");
+
+  const th = COLS.map(c=>`<th class="${c.l?'l':''}" data-k="${c.k}">${c.t}${S.sortKey===c.k?` <span class="arr">${S.sortDir<0?'▼':'▲'}</span>`:''}</th>`).join("");
+  const body = rows.map(r=>{
+    const tds = COLS.map(c=>{
+      let v = r[c.k], html;
+      if(c.k==="s"){
+        html = `<a href="https://www.tradingview.com/chart/?symbol=NASDAQ:${encodeURIComponent(r.s)}" target="_blank" rel="noopener">${r.s}</a> <span class="nm" title="${esc(r.n)}">${esc(r.n)}</span>`;
+      }else if(c.k==="fails"){
+        html = r.pass ? `<span class="tag ok">PASS</span>` : `<span class="tag no" title="Failed: ${r.fails.join(', ')}">${r.fails.join(" ")}</span>`;
+      }else if(c.k==="rank"){ html = v ?? "–";
+      }else if(c.big){ html = fmtBig(v);
+      }else if(c.l){ html = esc(v||"");
+      }else{
+        html = fmt(v, c.d);
+        if(c.sign && v!=null) html = `<span class="${v>=0?'pos':'neg'}">${html}</span>`;
+      }
+      return `<td class="${c.l?'l':''}">${html}</td>`;
+    }).join("");
+    return `<tr class="${r.pass?'':'failrow'}">${tds}</tr>`;
+  }).join("");
+  $("resTable").innerHTML = `<thead><tr>${th}</tr></thead><tbody>${body}</tbody>`;
+  $("emptyMsg").hidden = rows.length>0;
+  $("emptyMsg").textContent = rows.length ? "" : "No stocks pass the current filters. Tick “Show failed stocks too” to see why.";
+  $("exportBtn").disabled = rows.length===0;
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+
+/* ===================================================================== export */
+function exportCsv(){
+  const rows = (S.showAll ? lastRows : lastRows.filter(r=>r.pass)).slice().sort((a,b)=>(a.rank??1e9)-(b.rank??1e9));
+  const hdr = ["Rank","Symbol","Name","Sector","LCP","Return %","Sharpe Return","Volatility %","Retracement %","RSI","EMA50","EMA150","EMA200","TTM Sales","Sales Gr %","TTM Profit","Profit Gr %","Latest Qtr","Avg Vol","Mkt Cap","Status"];
+  const q = v => { const s = v==null ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const r2 = (v,d=2) => v==null||!isFinite(v) ? "" : v.toFixed(d);
+  const lines = [hdr.join(",")].concat(rows.map(r=>[
+    r.rank??"", r.s, r.n, r.sec, r2(r.lcp), r2(r.ret), r2(r.shp), r2(r.vol,1), r2(r.retr), r2(r.rsi,1),
+    r2(r.e50), r2(r.e150), r2(r.e200), r2(r.tRev,0), r2(r.gRev,1), r2(r.tNi,0), r2(r.gNi,1), r.qEnd||"", r2(r.vstat,0), r2(r.mc,0), r.pass?"PASS":r.fails.join(" ")
+  ].map(q).join(",")));
+  const asof = $("asOf").selectedOptions[0]?.textContent.slice(0,10) || "scan";
+  const csv = lines.join("\n");
+  try{
+    navigator.clipboard.writeText(csv).then(()=>say("CSV copied — paste into Excel or Google Sheets"), ()=>{});
+  }catch(e){}
+  const blob = new Blob([csv], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `NASDAQ_Momentum_${asof}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ===================================================================== UI <-> settings */
+function buildCondTable(){
+  const rows = S.conds.map((c,idx)=>{
+    let body;
+    if(c.type==="emaema"){
+      body = `EMA <input type="number" class="w-s" data-i="${idx}" data-f="a" value="${c.a}"> is above EMA <input type="number" class="w-s" data-i="${idx}" data-f="b" value="${c.b}"> <span class="hint">(on Close)</span>`;
+    }else if(c.type==="pxema"){
+      body = `<select data-i="${idx}" data-f="src"><option value="h"${c.src==="h"?" selected":""}>Today's High</option><option value="c"${c.src==="c"?" selected":""}>Close</option></select> is above EMA <input type="number" class="w-s" data-i="${idx}" data-f="p" value="${c.p}">`;
+    }else if(c.type==="ttm"){
+      const nm = c.fld==="rev" ? "Net Sales" : "Net Profit";
+      body = `TTM ${nm} is rising vs TTM <select data-i="${idx}" data-f="cmp"><option value="1"${c.cmp==1?" selected":""}>1 quarter earlier</option><option value="2"${c.cmp==2?" selected":""}>2 quarters earlier</option></select>
+        by at least <input type="number" class="w-s" data-i="${idx}" data-f="min" value="${c.min}" step="any"> %`
+        + (c.fld==="ni" ? ` <label class="chk"><input type="checkbox" data-i="${idx}" data-f="pos"${c.pos?" checked":""}> and TTM profit &gt; 0</label>` : "");
+    }else{
+      body = `RSI <input type="number" class="w-s" data-i="${idx}" data-f="p" value="${c.p}"> is above <input type="number" class="w-s" data-i="${idx}" data-f="lvl" value="${c.lvl}">`;
+    }
+    return `<tr><td class="c"><input type="checkbox" data-i="${idx}" data-f="on"${c.on?" checked":""}></td><td class="n">${c.id}.</td><td><div class="condline">${body}</div></td></tr>`;
+  }).join("");
+  $("condTable").innerHTML = rows;
+  updateExpr();
+}
+function updateExpr(){
+  const on = S.conds.filter(c=>c.on).map(c=>c.id);
+  $("exprTxt").textContent = S.sysOn ? (on.length ? on.join(" and ") : "(no conditions)") : "(system off)";
+  $("condTable").style.opacity = S.sysOn ? 1 : .45;
+}
+function writeUI(){
+  S.periods.forEach((p,i)=>{ $("p"+i+"on").checked=p.on; $("p"+i).value=p.v; $("p"+i).disabled=!p.on; });
+  S.weights.forEach((w,i)=>{ $("w"+i).value=w; $("w"+i).disabled=!S.periods[i].on; });
+  $("rtOn").checked=S.rtOn; $("rtPct").value=S.rtPct; $("rtMode").value=S.rtMode; $("rtRef").value=S.rtRef;
+  ["rtPct","rtMode","rtRef"].forEach(id=>$(id).disabled=!S.rtOn);
+  S.ema.forEach((e,i)=>{ $("e"+i+"on").checked=e.on; $("e"+i).value=e.v; $("e"+i).disabled=!e.on; });
+  $("volMode").value=S.volMode; $("volMin").value=S.volMin; $("volStat").value=S.volStat; $("volDays").value=S.volDays;
+  $("paOn").checked=S.paOn; $("paVal").value=S.paVal; $("paVal").disabled=!S.paOn;
+  $("pbOn").checked=S.pbOn; $("pbVal").value=S.pbVal; $("pbVal").disabled=!S.pbOn;
+  $("topOn").checked=S.topOn; $("topN").value=S.topN; $("topN").disabled=!S.topOn;
+  $("sysOn").checked=S.sysOn; $("showAll").checked=S.showAll;
+  if(DATA){ $("asOf").value=S.asOf; $("sector").value=S.sector; }
+  buildCondTable();
+}
+function readUI(){
+  S.periods = S.periods.map((p,i)=>({on:$("p"+i+"on").checked, v:num($("p"+i).value,p.v)}));
+  S.weights = S.weights.map((w,i)=>num($("w"+i).value,1));
+  S.rtOn=$("rtOn").checked; S.rtPct=num($("rtPct").value,20); S.rtMode=$("rtMode").value; S.rtRef=$("rtRef").value;
+  S.ema = S.ema.map((e,i)=>({on:$("e"+i+"on").checked, v:num($("e"+i).value,e.v)}));
+  S.volMode=$("volMode").value; S.volMin=num($("volMin").value,0); S.volStat=$("volStat").value; S.volDays=num($("volDays").value,20);
+  S.paOn=$("paOn").checked; S.paVal=num($("paVal").value,0); S.pbOn=$("pbOn").checked; S.pbVal=num($("pbVal").value,0);
+  S.topOn=$("topOn").checked; S.topN=num($("topN").value,200);
+  S.sysOn=$("sysOn").checked; S.showAll=$("showAll").checked;
+  S.asOf=$("asOf").value; S.sector=$("sector").value;
+  document.querySelectorAll("#condTable [data-f]").forEach(el=>{
+    const c = S.conds[+el.dataset.i], f = el.dataset.f;
+    if(f==="on") c.on = el.checked;
+    else if(f==="pos") c.pos = el.checked;
+    else if(f==="cmp") c.cmp = +el.value;
+    else if(f==="min") c.min = Math.max(0, num(el.value, 0));
+    else if(f==="src") c.src = el.value;
+    else c[f] = Math.max(1, num(el.value, c[f]));
+  });
+}
+
+/* ===================================================================== data load */
+function say(t){ const m=$("msg"); m.textContent=t; clearTimeout(say.t); say.t=setTimeout(()=>m.textContent="",6000); }
+function useData(d){
+  if(!d || !Array.isArray(d.stocks) || !Array.isArray(d.dates)){ $("loader").querySelector("p").textContent="That file is not scanner data. Pick scanner_data.js."; return; }
+  DATA = d; cache.clear();
+  $("loader").hidden = true;
+  const m = d.meta||{};
+  $("dataInfo").innerHTML = `<b>${m.count ?? d.stocks.length}</b> stocks · last bar <b>${m.last_date ?? d.dates.at(-1)}</b> · downloaded ${m.generated ?? "?"} · ${esc(m.universe ?? "")}`;
+  const dates = d.dates.slice(-260).reverse();
+  $("asOf").innerHTML = `<option value="">${d.dates.at(-1)} (latest)</option>` + dates.slice(1).map(x=>`<option value="${x}">${x}</option>`).join("");
+  if(S.asOf && !d.dates.includes(S.asOf)) S.asOf = "";
+  const secs = [...new Set(d.stocks.map(s=>s.sec).filter(Boolean))].sort();
+  $("sector").innerHTML = `<option value="">All sectors</option>` + secs.map(s=>`<option>${esc(s)}</option>`).join("");
+  if(S.sector && !secs.includes(S.sector)) S.sector = "";
+  writeUI();
+  $("scanBtn").disabled = false;
+  scan();
+}
+$("fileIn").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    let t = String(rd.result).trim();
+    t = t.replace(/^window\.SCANNER_DATA\s*=\s*/, "").replace(/;\s*$/, "");
+    if(!/^\{/.test(t)){ $("loader").querySelector("p").textContent="Please pick scanner_data.js (created by download_data.py), not the .py or .html file."; return; }
+    try{ useData(JSON.parse(t)); }catch(err){ $("loader").querySelector("p").textContent="Could not read that file: "+err.message; }
+  };
+  rd.readAsText(f);
+});
+
+/* ===================================================================== events */
+document.querySelector("main").addEventListener("change", e=>{
+  if(e.target.id==="fileIn") return;
+  if(e.target.id==="showAll"){ S.showAll=e.target.checked; saveSettings(); if(DATA) render(); return; }
+  readUI(); writeUI(); saveSettings();
+  if(DATA) scan();               // live re-scan on every change
+});
+$("scanBtn").addEventListener("click", scan);
+$("exportBtn").addEventListener("click", exportCsv);
+$("resetBtn").addEventListener("click", ()=>{ S = clone(DEFAULTS); saveSettings(); writeUI(); if(DATA) scan(); });
+$("resTable").addEventListener("click", e=>{
+  const th = e.target.closest("th"); if(!th) return;
+  const k = th.dataset.k;
+  if(S.sortKey===k) S.sortDir *= -1; else { S.sortKey=k; S.sortDir = (k==="s"||k==="sec"||k==="rank"||k==="retr"||k==="fails") ? 1 : -1; }
+  saveSettings();
+  if(DATA) render();
+});
+
+/* ===================================================================== boot */
+writeUI();
+if(window.SCANNER_DATA) useData(window.SCANNER_DATA);
+else $("loader").hidden = false;
+</script>
