@@ -40,6 +40,8 @@ main{max-width:1500px;margin:0 auto;padding-block:14px 40px;padding-left:max(16p
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:0}
 .cell{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .cell>.lbl{width:112px;font-weight:600;flex:none}
+.cell{min-width:0}
+select{max-width:100%;text-overflow:ellipsis}
 input[type=number],input[type=text],select{font:inherit;padding:5px 7px;border:1px solid var(--field-line);border-radius:6px;background:var(--field);color:var(--ink)}
 input[type=number]{width:72px}
 input.w-s{width:58px} input.w-l{width:110px}
@@ -91,11 +93,21 @@ details.help li{margin:3px 0}
 table.res th:nth-child(1),table.res td:nth-child(1){position:sticky;left:0;z-index:1;min-width:46px}
 table.res th:nth-child(2),table.res td:nth-child(2){position:sticky;left:46px;z-index:1;box-shadow:1px 0 0 var(--line)}
 table.res th:nth-child(1),table.res th:nth-child(2){z-index:2}
+table.rk tr{cursor:pointer}
+table.rk tr.sel td{background:var(--soft);font-weight:600}
+table.rk tr.dim td{color:var(--fail-ink)}
+table.rk tr.top td:first-child{box-shadow:inset 3px 0 0 var(--navy)}
+.rk-ctl{border-bottom:1px solid var(--line)}
+.bar{display:inline-block;height:6px;border-radius:3px;background:var(--navy);vertical-align:middle;margin-left:6px;opacity:.75}
+.chipx{display:inline-flex;align-items:center;gap:6px;background:var(--soft);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12.5px;cursor:pointer}
 #jump{margin-left:auto;color:var(--navy);font-weight:600;text-decoration:none;font-size:13px}
 #msg{font-size:13px;color:var(--pass);font-weight:600}
 @media (max-width:640px){
   .nm{display:none}
-  table.res th:nth-child(3),table.res td:nth-child(3){display:none}
+  .bar{display:none}
+  .rk-ctl .pgrp{flex-wrap:wrap;max-width:100%}
+  table.rk td:nth-child(2){white-space:normal;min-width:120px;max-width:150px}
+  #resTable th:nth-child(3),#resTable td:nth-child(3),#resTable th:nth-child(5),#resTable td:nth-child(5){display:none}
   .grid{grid-template-columns:1fr}
   .cell>.lbl{width:100%}
   .btn{padding:10px 12px}
@@ -127,6 +139,9 @@ table.res th:nth-child(1),table.res th:nth-child(2){z-index:2}
 
       <div class="cell"><span class="lbl">Sector</span>
         <select id="sector"><option value="">All sectors</option></select></div>
+
+      <div class="cell"><span class="lbl">Industry</span>
+        <select id="industry"><option value="">All industries</option></select></div>
 
       <div class="cell"><span class="lbl">Period (days)</span>
         <span class="pgrp"><input type="checkbox" id="p0on"><input type="number" class="w-s" id="p0"></span>
@@ -180,6 +195,26 @@ table.res th:nth-child(1),table.res th:nth-child(2){z-index:2}
   </section>
 
   <!-- ===================== ACTIONS ===================== -->
+  <section class="panel" id="sectors">
+    <h2>Sector ranking <span class="hint" style="text-transform:none;letter-spacing:0">tap a row to see its stocks</span></h2>
+    <div class="actions rk-ctl">
+      <span class="pgrp">Rank
+        <select id="rkGroup"><option value="sec">Sectors</option><option value="ind">Industries</option></select>
+        by
+        <select id="rkBy">
+          <option value="med">Median Return %</option>
+          <option value="avg">Average Return %</option>
+          <option value="brd">% above EMA 200</option>
+          <option value="pct">% passing the system</option>
+        </select></span>
+      <span class="pgrp">min <input type="number" class="w-s" id="rkMin" min="1"> stocks</span>
+      <label class="chk"><input type="checkbox" id="tdOn"> Top-down: only stocks from the top</label>
+      <input type="number" class="w-s" id="tdN" min="1">
+      <span id="rkScope" class="hint"></span>
+    </div>
+    <div class="tablewrap"><table class="res rk" id="rkTable"></table></div>
+  </section>
+
   <section class="panel" id="results">
     <div class="actions">
       <div id="status">Load data to scan.</div>
@@ -202,6 +237,9 @@ table.res th:nth-child(1),table.res th:nth-child(2){z-index:2}
         <li><b>Retracement %</b> — for 52W High / ATH: how far Close is below the high. For 52W Low / ATL: how far Close is above the low.</li>
         <li><b>RSI</b> — Wilder's RSI on Close, period from condition 5. <b>EMAs</b> — on Close, seeded with an SMA (same as TradingView).</li>
         <li><b>TTM Sales / TTM Profit</b> — sum of the latest 4 quarters of Total Revenue / Net Income (Yahoo Finance). <b>Rising</b> = higher than the TTM ending 1 (or 2) quarter(s) earlier, which is the same as the latest quarter beating the same quarter a year ago. Stocks with no quarterly data fail these two conditions. Quarterly results are the latest available, even when you scan an earlier date.</li>
+        <li><b>Sector ranking</b> — every stock in the universe is grouped by its Nasdaq sector (or industry). Median / Average Return % use the same Period and Weight settings as the scanner. <b>% &gt; EMA 200</b> is the share of the group's stocks with Close above EMA 200. <b>Passing</b> counts stocks that pass all your filters and conditions. Groups with fewer stocks than the "min" setting are listed but not ranked.</li>
+        <li><b>Top-down</b> — tick it to show only stocks from the top N sectors (or industries). Tap a sector to see only its stocks; switch to Industries to rank the industries inside that sector.</li>
+        <li><b>Sec Rk</b> — the stock's sector rank.</li>
         <li><b>Avg Vol</b> — the volume statistic chosen in the Volume row (average or median over the chosen days).</li>
         <li>Prices are split/dividend adjusted (Yahoo Finance), so values can differ slightly from unadjusted charts.</li>
       </ul>
@@ -215,7 +253,8 @@ table.res th:nth-child(1),table.res th:nth-child(2){z-index:2}
 "use strict";
 /* ===================================================================== defaults */
 const DEFAULTS = {
-  asOf: "", sector: "",
+  asOf: "", sector: "", industry: "",
+  rkGroup:"sec", rkBy:"med", rkMin:3, tdOn:false, tdN:3,
   periods: [{on:true,v:252},{on:false,v:120},{on:false,v:90},{on:false,v:60}],
   weights: [1,1,1,1],
   rtOn:true, rtPct:20, rtMode:"within", rtRef:"h52",
@@ -371,9 +410,8 @@ function scan(){
   const rsiP = (S.conds.find(c=>c.type==="rsi")||{p:14}).p;
   const maxP = periods.length ? Math.max(...periods.map(p=>p.P)) : 0;
 
-  // market-cap rank within loaded data
+  // universe = all loaded stocks (optionally top-N by market cap); sector/industry filters apply later in view()
   let allowed = DATA.stocks;
-  if(S.sector) allowed = allowed.filter(s=>s.sec===S.sector);
   if(S.topOn){
     allowed = [...allowed].sort((a,b)=>(b.mc||0)-(a.mc||0)).slice(0, Math.max(1,Math.round(num(S.topN))));
   }
@@ -438,20 +476,90 @@ function scan(){
     }
 
     rows.push({
-      s:st.s, n:st.n, sec:st.sec, mc:st.mc, lcp:C, ret, shp, vol, retr,
+      s:st.s, n:st.n, sec:st.sec||"Unclassified", ind:st.ind||"Unclassified", mc:st.mc, lcp:C, ret, shp, vol, retr,
       rsi:getRsi(st,rsiP)[i], e50:getEma(st,50)[i], e150:getEma(st,150)[i], e200:getEma(st,200)[i],
       vstat, pass: fails.length===0, fails,
       ...ttmCols(st),
     });
   }
-  // rank by Return % among passing stocks
-  const passing = rows.filter(r=>r.pass && r.ret!=null).sort((a,b)=>b.ret-a.ret);
-  passing.forEach((r,k)=>r.rank=k+1);
-  lastRows = rows;
+  allRows = rows;
   saveSettings();
   lastG = g; lastUni = allowed.length;
+  view();
+}
+
+/* ===================================================================== sector ranking + top-down view */
+let allRows = [], rkRows = [], secRank = {}, indRank = {};
+const RK_KEY = {med:"med", avg:"avg", brd:"brd", pct:"pct"};
+function groupStats(rows, key){
+  const m = new Map();
+  for(const r of rows){ const k=r[key]; if(!m.has(k)) m.set(k,[]); m.get(k).push(r); }
+  const out = [];
+  for(const [name, rs] of m){
+    const rets = rs.map(r=>r.ret).filter(v=>v!=null && isFinite(v));
+    const above = rs.filter(r=>r.e200!=null && r.lcp>r.e200).length;
+    const passing = rs.filter(r=>r.pass);
+    const pool = passing.length ? passing : rs.filter(r=>r.ret!=null);
+    const best = pool.reduce((b,r)=> (b==null || r.ret>b.ret) ? r : b, null);
+    out.push({
+      name, sec: rs[0].sec, n: rs.length,
+      med: rets.length ? median(rets) : null,
+      avg: rets.length ? rets.reduce((a,b)=>a+b,0)/rets.length : null,
+      brd: rs.length ? above/rs.length*100 : null,
+      pct: rs.length ? passing.length/rs.length*100 : null,
+      np: passing.length, best,
+    });
+  }
+  const k = RK_KEY[S.rkBy] || "med", minN = Math.max(1, Math.round(num(S.rkMin,3)));
+  out.sort((a,b)=>{
+    const ea = a.n>=minN && a[k]!=null, eb = b.n>=minN && b[k]!=null;
+    if(ea!==eb) return ea ? -1 : 1;
+    return (b[k]??-Infinity)-(a[k]??-Infinity) || b.n-a.n;
+  });
+  let rk = 0; for(const g of out) g.rank = (g.n>=minN && g[k]!=null) ? ++rk : null;
+  return out;
+}
+function view(){
+  // sector ranking always covers the whole universe; industry ranking covers the chosen sector (drill-down)
+  const secStats = groupStats(allRows, "sec");
+  const indBase  = S.sector ? allRows.filter(r=>r.sec===S.sector) : allRows;
+  const indStats = groupStats(indBase, "ind");
+  secRank = Object.fromEntries(secStats.map(g=>[g.name,g.rank]));
+  indRank = Object.fromEntries(indStats.map(g=>[g.name,g.rank]));
+  rkRows = S.rkGroup==="ind" ? indStats : secStats;
+
+  const N = Math.max(1, Math.round(num(S.tdN,3)));
+  const inTop = r => S.rkGroup==="ind" ? (indRank[r.ind]!=null && indRank[r.ind]<=N && (!S.sector || r.sec===S.sector))
+                                         : (secRank[r.sec]!=null && secRank[r.sec]<=N);
+  const vis = allRows.filter(r => (!S.sector || r.sec===S.sector) && (!S.industry || r.ind===S.industry) && (!S.tdOn || inTop(r)));
+  for(const r of allRows){ r.rank = null; r.sRk = secRank[r.sec] ?? null; r.iRk = indRank[r.ind] ?? null; }
+  vis.filter(r=>r.pass && r.ret!=null).sort((a,b)=>b.ret-a.ret).forEach((r,k)=>r.rank=k+1);
+  lastRows = vis;
+  renderRanking();
   render();
 }
+function renderRanking(){
+  const grp = S.rkGroup==="ind" ? "Industry" : "Sector";
+  const N = Math.max(1, Math.round(num(S.tdN,3)));
+  const maxV = Math.max(1, ...rkRows.map(g=>Math.abs(g[RK_KEY[S.rkBy]]??0)));
+  const sel = S.rkGroup==="ind" ? S.industry : S.sector;
+  const th = `<tr><th>Rank</th><th class="l">${grp}</th>${S.rkGroup==="ind"&&!S.sector?'<th class="l">Sector</th>':''}<th>Median Ret %</th><th>Avg Ret %</th><th>% &gt; EMA 200</th><th>Passing</th><th>Stocks</th><th class="l">Best stock</th></tr>`;
+  const body = rkRows.map(g=>{
+    const v = g[RK_KEY[S.rkBy]];
+    const w = v==null ? 0 : Math.round(Math.max(0,v)/maxV*60);
+    const cls = [g.name===sel?"sel":"", g.rank==null?"dim":"", (S.tdOn && g.rank!=null && g.rank<=N)?"top":""].join(" ");
+    const best = g.best ? `<b>${esc(g.best.s)}</b> ${fmt(g.best.ret,1)}%` : "–";
+    return `<tr class="${cls}" data-g="${esc(g.name)}" data-sec="${esc(g.sec)}">
+      <td>${g.rank??"–"}</td><td class="l">${esc(g.name)}<span class="bar" style="width:${w}px"></span></td>
+      ${S.rkGroup==="ind"&&!S.sector?`<td class="l">${esc(g.sec)}</td>`:""}
+      <td>${sgn(g.med,1)}</td><td>${sgn(g.avg,1)}</td><td>${fmt(g.brd,0)}</td><td>${g.np}</td><td>${g.n}</td><td class="l">${best}</td></tr>`;
+  }).join("");
+  $("rkTable").innerHTML = `<thead>${th}</thead><tbody>${body}</tbody>`;
+  const scope = [];
+  if(S.rkGroup==="ind") scope.push(S.sector ? `industries inside ${esc(S.sector)}` : "all industries");
+  $("rkScope").innerHTML = scope.join(" · ");
+}
+function sgn(v,d){ return v==null||!isFinite(v) ? "–" : `<span class="${v>=0?'pos':'neg'}">${fmt(v,d)}</span>`; }
 
 function ttmCols(st){
   const cs = S.conds.find(c=>c.type==="ttm"&&c.fld==="rev"), cn = S.conds.find(c=>c.type==="ttm"&&c.fld==="ni");
@@ -466,6 +574,8 @@ const COLS = [
   {k:"rank", t:"Rank", d:0},
   {k:"s",    t:"Scrip", l:true},
   {k:"sec",  t:"Sector", l:true},
+  {k:"sRk",  t:"Sec Rk", d:0},
+  {k:"ind",  t:"Industry", l:true},
   {k:"lcp",  t:"LCP $", d:2},
   {k:"ret",  t:"Return %", d:2, sign:true},
   {k:"shp",  t:"Sharpe Return", d:2, sign:true},
@@ -498,8 +608,12 @@ function render(){
   });
 
   const nPass = lastRows.filter(r=>r.pass).length;
+  const scope = [];
+  if(S.sector) scope.push(esc(S.sector));
+  if(S.industry) scope.push(esc(S.industry));
+  if(S.tdOn) scope.push(`top ${Math.round(num(S.tdN,3))} ${S.rkGroup==="ind"?"industries":"sectors"}`);
   $("status").innerHTML = `<b>${nPass}</b> of ${lastRows.length} stocks pass · as of <b>${DATA.dates[g]}</b>`
-    + (universeN!==lastRows.length ? ` · ${universeN-lastRows.length} not listed yet` : "");
+    + (scope.length ? ` · ${scope.join(" · ")} <span class="chipx" id="clearScope" role="button" tabindex="0">Show all ✕</span>` : ` · all ${allRows.length} stocks`);
 
   const th = COLS.map(c=>`<th class="${c.l?'l':''}" data-k="${c.k}">${c.t}${S.sortKey===c.k?` <span class="arr">${S.sortDir<0?'▼':'▲'}</span>`:''}</th>`).join("");
   const body = rows.map(r=>{
@@ -509,7 +623,7 @@ function render(){
         html = `<a href="https://www.tradingview.com/chart/?symbol=NASDAQ:${encodeURIComponent(r.s)}" target="_blank" rel="noopener">${r.s}</a> <span class="nm" title="${esc(r.n)}">${esc(r.n)}</span>`;
       }else if(c.k==="fails"){
         html = r.pass ? `<span class="tag ok">PASS</span>` : `<span class="tag no" title="Failed: ${r.fails.join(', ')}">${r.fails.join(" ")}</span>`;
-      }else if(c.k==="rank"){ html = v ?? "–";
+      }else if(c.k==="rank" || c.k==="sRk"){ html = v ?? "–";
       }else if(c.big){ html = fmtBig(v);
       }else if(c.l){ html = esc(v||"");
       }else{
@@ -530,11 +644,11 @@ function esc(s){ return String(s).replace(/[&<>"]/g, m=>({"&":"&amp;","<":"&lt;"
 /* ===================================================================== export */
 function exportCsv(){
   const rows = (S.showAll ? lastRows : lastRows.filter(r=>r.pass)).slice().sort((a,b)=>(a.rank??1e9)-(b.rank??1e9));
-  const hdr = ["Rank","Symbol","Name","Sector","LCP","Return %","Sharpe Return","Volatility %","Retracement %","RSI","EMA50","EMA150","EMA200","TTM Sales","Sales Gr %","TTM Profit","Profit Gr %","Latest Qtr","Avg Vol","Mkt Cap","Status"];
+  const hdr = ["Rank","Symbol","Name","Sector","Sector Rank","Industry","LCP","Return %","Sharpe Return","Volatility %","Retracement %","RSI","EMA50","EMA150","EMA200","TTM Sales","Sales Gr %","TTM Profit","Profit Gr %","Latest Qtr","Avg Vol","Mkt Cap","Status"];
   const q = v => { const s = v==null ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
   const r2 = (v,d=2) => v==null||!isFinite(v) ? "" : v.toFixed(d);
   const lines = [hdr.join(",")].concat(rows.map(r=>[
-    r.rank??"", r.s, r.n, r.sec, r2(r.lcp), r2(r.ret), r2(r.shp), r2(r.vol,1), r2(r.retr), r2(r.rsi,1),
+    r.rank??"", r.s, r.n, r.sec, r.sRk??"", r.ind, r2(r.lcp), r2(r.ret), r2(r.shp), r2(r.vol,1), r2(r.retr), r2(r.rsi,1),
     r2(r.e50), r2(r.e150), r2(r.e200), r2(r.tRev,0), r2(r.gRev,1), r2(r.tNi,0), r2(r.gNi,1), r.qEnd||"", r2(r.vstat,0), r2(r.mc,0), r.pass?"PASS":r.fails.join(" ")
   ].map(q).join(",")));
   const asof = $("asOf").selectedOptions[0]?.textContent.slice(0,10) || "scan";
@@ -586,7 +700,9 @@ function writeUI(){
   $("pbOn").checked=S.pbOn; $("pbVal").value=S.pbVal; $("pbVal").disabled=!S.pbOn;
   $("topOn").checked=S.topOn; $("topN").value=S.topN; $("topN").disabled=!S.topOn;
   $("sysOn").checked=S.sysOn; $("showAll").checked=S.showAll;
-  if(DATA){ $("asOf").value=S.asOf; $("sector").value=S.sector; }
+  if(DATA){ $("asOf").value=S.asOf; $("sector").value=S.sector; fillIndustries(); $("industry").value=S.industry; }
+  $("rkGroup").value=S.rkGroup; $("rkBy").value=S.rkBy; $("rkMin").value=S.rkMin;
+  $("tdOn").checked=S.tdOn; $("tdN").value=S.tdN; $("tdN").disabled=!S.tdOn;
   buildCondTable();
 }
 function readUI(){
@@ -598,7 +714,11 @@ function readUI(){
   S.paOn=$("paOn").checked; S.paVal=num($("paVal").value,0); S.pbOn=$("pbOn").checked; S.pbVal=num($("pbVal").value,0);
   S.topOn=$("topOn").checked; S.topN=num($("topN").value,200);
   S.sysOn=$("sysOn").checked; S.showAll=$("showAll").checked;
-  S.asOf=$("asOf").value; S.sector=$("sector").value;
+  S.asOf=$("asOf").value;
+  if($("sector").value!==S.sector){ S.sector=$("sector").value; S.industry=""; }   // new sector -> clear industry
+  else S.industry=$("industry").value;
+  S.rkGroup=$("rkGroup").value; S.rkBy=$("rkBy").value; S.rkMin=Math.max(1,num($("rkMin").value,3));
+  S.tdOn=$("tdOn").checked; S.tdN=Math.max(1,num($("tdN").value,3));
   document.querySelectorAll("#condTable [data-f]").forEach(el=>{
     const c = S.conds[+el.dataset.i], f = el.dataset.f;
     if(f==="on") c.on = el.checked;
@@ -608,6 +728,13 @@ function readUI(){
     else if(f==="src") c.src = el.value;
     else c[f] = Math.max(1, num(el.value, c[f]));
   });
+}
+
+function fillIndustries(){
+  if(!DATA) return;
+  const inds = [...new Set(DATA.stocks.filter(s=>!S.sector || (s.sec||"Unclassified")===S.sector).map(s=>s.ind||"Unclassified"))].sort();
+  $("industry").innerHTML = `<option value="">All industries</option>` + inds.map(x=>`<option>${esc(x)}</option>`).join("");
+  if(S.industry && !inds.includes(S.industry)) S.industry = "";
 }
 
 /* ===================================================================== data load */
@@ -621,7 +748,7 @@ function useData(d){
   const dates = d.dates.slice(-260).reverse();
   $("asOf").innerHTML = `<option value="">${d.dates.at(-1)} (latest)</option>` + dates.slice(1).map(x=>`<option value="${x}">${x}</option>`).join("");
   if(S.asOf && !d.dates.includes(S.asOf)) S.asOf = "";
-  const secs = [...new Set(d.stocks.map(s=>s.sec).filter(Boolean))].sort();
+  const secs = [...new Set(d.stocks.map(s=>s.sec||"Unclassified"))].sort();
   $("sector").innerHTML = `<option value="">All sectors</option>` + secs.map(s=>`<option>${esc(s)}</option>`).join("");
   if(S.sector && !secs.includes(S.sector)) S.sector = "";
   writeUI();
@@ -648,6 +775,21 @@ document.querySelector("main").addEventListener("change", e=>{
   if(DATA) scan();               // live re-scan on every change
 });
 $("scanBtn").addEventListener("click", scan);
+$("rkTable").addEventListener("click", e=>{
+  const tr = e.target.closest("tbody tr"); if(!tr) return;
+  const g = tr.dataset.g;
+  if(S.rkGroup==="ind"){
+    if(S.industry===g){ S.industry=""; } else { S.industry=g; if(!S.sector) S.sector=tr.dataset.sec; }
+  }else{
+    if(S.sector===g){ S.sector=""; S.industry=""; } else { S.sector=g; S.industry=""; }
+  }
+  writeUI(); saveSettings(); view();
+  document.getElementById("results").scrollIntoView({behavior:"smooth", block:"start"});
+});
+$("status").addEventListener("click", e=>{
+  if(e.target.id!=="clearScope") return;
+  S.sector=""; S.industry=""; S.tdOn=false; writeUI(); saveSettings(); view();
+});
 $("exportBtn").addEventListener("click", exportCsv);
 $("resetBtn").addEventListener("click", ()=>{ S = clone(DEFAULTS); saveSettings(); writeUI(); if(DATA) scan(); });
 $("resTable").addEventListener("click", e=>{

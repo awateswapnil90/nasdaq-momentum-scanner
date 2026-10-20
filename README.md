@@ -9,7 +9,12 @@ Top 500 NASDAQ common stocks (by market cap, price ≥ $5) filtered by the **Mom
 ## Entry conditions (all editable on the page)
 1. EMA 50 > EMA 200 · 2. Today's High > EMA 50 · 3. EMA 50 > EMA 150 · 4. EMA 150 > EMA 200 · 5. RSI 14 > 38 · 6. Today's High > EMA 150 · 7. Today's High > EMA 200 · 8. TTM Net Sales rising · 9. TTM Net Profit rising
 
-Scanner filters: Period/Weight return, Retracement from 52W High/Low/ATH/ATL, EMA filter, Volume/Turnover, Price, Sector, Top-N by market cap.
+Scanner filters: Period/Weight return, Retracement from 52W High/Low/ATH/ATL, EMA filter, Volume/Turnover, Price, Sector, Industry, Top-N by market cap.
+
+## Top-down workflow
+1. **Sector ranking** panel ranks Nasdaq sectors by Median Return % (or Average Return %, % above EMA 200, % passing the system), using all 500 stocks.
+2. Tap a sector to see its stocks, or switch to **Industries** to rank the industries inside it.
+3. Tick **Top-down** to keep only stocks from the top N sectors/industries. Stocks are then ranked by Return % within that set.
 
 ## Files
 | File | Purpose |
