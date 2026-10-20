@@ -13,7 +13,7 @@ What it does
 
 Usage
   pip install yfinance pandas requests
-  python download_data.py                  # top 200 by market cap
+  python download_data.py                  # top 500 by market cap
   python download_data.py --top 500        # change universe size
   python download_data.py --min-price 10   # change penny-stock cut-off
   python download_data.py --tickers my_list.txt   # use your own list (one ticker per line)
@@ -237,6 +237,14 @@ def load_fundamentals(symbols, refresh=False):
 
 
 # --------------------------------------------------------------------------- output
+def rp(x):
+    """Price rounding that keeps the file small: 2 decimals above $10, 3 above $1, else 4."""
+    if x is None or (isinstance(x, float) and math.isnan(x)):
+        return None
+    x = float(x)
+    return round(x, 2 if abs(x) >= 10 else 3 if abs(x) >= 1 else 4)
+
+
 def r4(x):
     if x is None or (isinstance(x, float) and math.isnan(x)):
         return None
@@ -278,13 +286,12 @@ def build_payload(universe, prices, top_n, min_price, funds=None):
             "ind": row.get("industry") or "",
             "mc": None if pd.isna(row.get("mcap")) else float(row["mcap"]),
             "st": start,
-            "hp": r4(hp), "lp": r4(lp),
-            "o": [r4(x) for x in d["Open"]],
-            "h": [r4(x) for x in d["High"]],
-            "l": [r4(x) for x in d["Low"]],
-            "c": [r4(x) for x in d["Close"]],
+            "hp": rp(hp), "lp": rp(lp),
+            "h": [rp(x) for x in d["High"]],
+            "l": [rp(x) for x in d["Low"]],
+            "c": [rp(x) for x in d["Close"]],
             "v": [int(x) for x in d["Volume"]],
-            "f": ({k: funds[sym][k] for k in ("qd", "rev", "ni")} if sym in funds else None),
+            "f": ({k: funds[sym][k][:6] for k in ("qd", "rev", "ni")} if sym in funds else None),
         })
     return {
         "meta": {
@@ -301,7 +308,7 @@ def build_payload(universe, prices, top_n, min_price, funds=None):
 
 def main():
     ap = argparse.ArgumentParser(description="Download data for the NASDAQ momentum scanner")
-    ap.add_argument("--top", type=int, default=200, help="universe size: top N by market cap (default 200)")
+    ap.add_argument("--top", type=int, default=500, help="universe size: top N by market cap (default 500)")
     ap.add_argument("--min-price", type=float, default=5.0, help="exclude stocks below this price (default $5)")
     ap.add_argument("--tickers", help="optional text file with one ticker per line (overrides universe build)")
     ap.add_argument("--refresh-fundamentals", action="store_true", help="re-download quarterly results now (default: weekly)")

@@ -1,6 +1,6 @@
 # NASDAQ Momentum Scanner
 
-Top 200 NASDAQ common stocks (by market cap, price ≥ $5) filtered by the **Momentum_investing_Entry** system and ranked by Return %.
+Top 500 NASDAQ common stocks (by market cap, price ≥ $5) filtered by the **Momentum_investing_Entry** system and ranked by Return %.
 
 - **Open the scanner:** the GitHub Pages link of this repo (Settings → Pages).
 - **Automatic refresh:** every US trading day at about 3:45 AM IST (GitHub Action "Update scanner data").
@@ -16,7 +16,7 @@ Scanner filters: Period/Weight return, Retracement from 52W High/Low/ATH/ATL, EM
 |---|---|
 | `index.html` | the scanner page |
 | `download_data.py` | builds the universe and downloads daily prices + quarterly results (Yahoo Finance) |
-| `scanner_data.js` | data the page reads (written by the Action) |
+| `scanner_data.js` | data the page reads — built by the Action and published with the site (not stored in the repo) |
 | `fundamentals_cache.json` | quarterly results, refreshed weekly |
 | `universe_cache.csv` | last good NASDAQ stock list, used if Nasdaq's site refuses the request |
 | `.github/workflows/update.yml` | the daily/manual refresh job |

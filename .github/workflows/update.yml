@@ -7,7 +7,7 @@ on:
   workflow_dispatch: {}        # "Run workflow" button (works from the GitHub phone app)
   push:
     branches: [main]
-    paths: ["index.html"]      # redeploy the page when it changes
+    paths: ["index.html", ".github/workflows/update.yml"]   # redeploy when the page changes
 
 permissions:
   contents: write
@@ -35,14 +35,20 @@ jobs:
 
       - name: Download prices and quarterly results
         if: github.event_name != 'push'
-        run: python download_data.py --top 200
+        run: python download_data.py --top 500
+
+      - name: Reuse the live data (page-only change)
+        if: github.event_name == 'push'
+        run: |
+          curl -sfL "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scanner_data.js" -o scanner_data.js \
+            || python download_data.py --top 500
 
       - name: Save data to the repository
         if: github.event_name != 'push'
         run: |
           git config user.name "scanner-bot"
           git config user.email "scanner-bot@users.noreply.github.com"
-          git add scanner_data.js fundamentals_cache.json universe_cache.csv
+          git add fundamentals_cache.json universe_cache.csv
           git diff --cached --quiet || git commit -m "Data update $(date -u +%Y-%m-%d)"
           git push
 
